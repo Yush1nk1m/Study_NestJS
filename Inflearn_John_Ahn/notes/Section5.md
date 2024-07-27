@@ -136,10 +136,18 @@ TypeORM Repository 공식 문서: http://typeorm.delightful.studio/classes/_repo
 import { Repository } from 'typeorm';
 import { Board } from './board.entity';
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
-export class BoardRepository extends Repository<Board> {}
+export class BoardRepository {
+  constructor(
+    @InjectRepository(Board)
+    private readonly repository: Repository<Board>,
+  ) {}
+}
 ```
+
+- **@InjectRepository()**: 외부에서 Board를 위한 Repository를 사용하기 위해 명시해 준다.
 
 리포지토리를 사용하기 위해 모듈에서 import해준다.
 
@@ -150,11 +158,12 @@ import { BoardsController } from './boards.controller';
 import { BoardsService } from './boards.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Board } from './board.entity';
+import { BoardRepository } from './board.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Board])],
   controllers: [BoardsController],
-  providers: [BoardsService],
+  providers: [BoardsService, BoardRepository],
 })
 export class BoardsModule {}
 ```
