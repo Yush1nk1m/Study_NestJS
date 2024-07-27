@@ -231,4 +231,4 @@ export class BoardsController {
 
 #### 접근 제한자를 사용한 서비스 주입 코드의 단순화
 
-`public`, `protected`, `private`의 접근 제한자를 생성자 파라미터에 선언하면 이는 암묵적으로 클래스 프로퍼티로 선언된다. 그렇기 때문에 위에서 프로퍼티를 선언하고 생성자에서 대입하는 로직을 제거하고 `constructor(private boardsService: BoardsService) {}`와 같이 매우 단순하게 변경할 수 있는 것이다.
+`public`, `protected`, `private`의 접근 제한자를 생성자 파라미터에 사용하면 이는 암묵적으로 클래스 프로퍼티로 선언된다. 그렇기 때문에 위에서 프로퍼티를 선언하고 생성자에서 대입하는 로직을 제거하고 `constructor(private boardsService: BoardsService) {}`와 같이 매우 단순하게 변경할 수 있는 것이다.

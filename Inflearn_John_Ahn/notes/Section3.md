@@ -47,3 +47,64 @@ export class BoardsController {
 3. 세부적인 로직을 처리하기 위해 서비스를 호출한다.
 4. 서비스가 로직을 처리한 후 결과를 컨트롤러에 반환한다.
 5. 컨트롤러는 클라이언트에 응답을 보낸다.
+
+## Board Model 정의하기
+
+게시물 모델을 정의하여 게시물에 필요한 데이터를 정의한다. 먼저 **src/boards/board.model.ts**를 생성한다.
+
+모델을 정의하기 위해 Interface 또는 Class를 사용할 수 있다. Interface는 변수의 타입만을 검사하고, Class는 변수의 타입 검사 및 인스턴스 생성까지 할 수 있다. 우선 구조를 정의하기 위해 Interface를 사용한다.
+
+**src/boards/board.model.ts**
+```
+export interface Board {
+  id: string;
+  title: string;
+  description: string;
+  status: BoardStatus;
+}
+
+export enum BoardStatus {
+  PUBLIC = 'PUBLIC',
+  PRIVATE = 'PRIVATE',
+}
+```
+
+### 생성한 Board 모델을 사용한 타이핑
+
+정의한 모델을 사용해 서비스부터 타이핑을 시작한다.
+
+**src/boards/boards.service.ts**
+```
+import { Injectable } from '@nestjs/common';
+import { Board } from './board.model';
+
+@Injectable()
+export class BoardsService {
+  private boards: Board[] = [];
+
+  getAllBoards(): Board[] {
+    return this.boards;
+  }
+}
+```
+
+그 다음으로는 컨트롤러를 타이핑한다.
+
+**src/boards/boards.controller.ts**
+```
+import { Controller, Get } from '@nestjs/common';
+import { BoardsService } from './boards.service';
+import { Board } from './board.model';
+
+@Controller('boards')
+export class BoardsController {
+  constructor(private boardsService: BoardsService) {}
+
+  @Get()
+  getAllTask(): Board[] {
+    return this.boardsService.getAllBoards();
+  }
+}
+```
+
+이렇게 타이핑을 수행하면 코드의 가독성이 좋아지고 타입으로 인한 오류를 방지할 수 있다.
