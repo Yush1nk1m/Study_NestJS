@@ -71,7 +71,7 @@ constructor(private readonly boardRepository: BoardRepository) {}
 
 아직 데이터베이스에 저장된 게시물은 없지만, Postman을 사용해 게시물을 조회하는 것이 가능한지 확인해 보자.
 
-![GET boards/:id test](images/getBoardByIdTest.png)
+![GET boards/:id test](images/findOneByIdTest.png)
 
 잘 작동함을 확인할 수 있다. 데이터베이스 연동 이후의 작업 과정은 다음과 같다.
 
