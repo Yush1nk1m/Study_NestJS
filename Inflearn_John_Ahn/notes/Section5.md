@@ -100,6 +100,7 @@ ORM 없이 데이터베이스 테이블을 생성하려면 `CREATE TABLE board (
 import { BaseEntity, Column, PrimaryGeneratedColumn } from 'typeorm';
 import { BoardStatus } from './board.model';
 
+@Entity()
 export class Board extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
