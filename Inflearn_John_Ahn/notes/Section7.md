@@ -377,3 +377,332 @@ import * as bcrypt from 'bcrypt'
 ![POST auth/signin test](images/signinTest.png)
 
 기존에 가입한 회원 정보로 로그인을 시도하면 다음과 같이 성공함을 확인할 수 있다.
+
+## JWT
+
+토큰 기반의 로그인 기능을 구현하기 위해 JWT라는 모듈을 사용해야 한다. JWT 토큰은 다음과 같은 구조를 가진다.
+
+- **Header**: 타입, 해싱 알고리즘 등 토큰에 대한 메타데이터를 포함한다.
+- **Payload**: 사용자 정보, 만료 기간 등의 정보를 포함한다.
+- **Signature**: base64 인코딩된 헤더와 페이로드 및 비밀 키를 해싱 알고리즘으로 해싱한 것이다. 사용되는 비밀 키는 노출되어선 안 된다.
+
+### JWT를 사용한 요청의 흐름
+
+1. 클라이언트는 JWT 토큰을 헤더에 포함하여 요청한다.
+2. 서버에서는 클라이언트 토큰의 Header, Payload와 서버가 갖고 있는 비밀 키로 Signature 부분을 생성한다.
+3. 클라이언트의 JWT 토큰의 Signature와 서버가 생성한 Signature가 동일한지 비교하고 요청에 대한 서비스를 처리한다.
+
+## JWT를 이용해서 토큰 생성하기
+
+이번에는 JWT 모듈을 이용해 토큰을 생성한다. 또한 Passport 모듈도 함께 사용해 로그인 기능을 조금 더 쉽게 구현할 것이다. 필요한 모듈들은 다음과 같다.
+
+- **@nestjs/jwt**: NestJS에서 JWT를 사용하기 위한 모듈이다.
+- **@nestjs/passport**: NestJS에서 Passport를 사용하기 위한 모듈이다.
+- **passport**: Passport 모듈이다.
+- **passport-jwt**: JWT 로그인을 위한 Passport 모듈이다.
+
+
+다음과 같은 명령어로 필요한 모듈들을 설치한다.
+
+```
+$ npm i @nestjs/jwt @nestjs/passport passport passport-jwt --save
+```
+
+### 애플리케이션에 JWT 모듈 등록하기
+
+애플리케이션에서 JWT 모듈을 사용하려면 앱 모듈에 등록해야 한다.
+
+**src/auth/auth.module.ts**
+```
+import { Module } from '@nestjs/common';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './user.entity';
+import { UserRepository } from './user.repository';
+import { JwtModule } from '@nestjs/jwt';
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+@Module({
+  imports: [
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: {
+        expiresIn: 60 * 60,
+      },
+    }),
+    TypeOrmModule.forFeature([User]),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, UserRepository],
+})
+export class AuthModule {}
+```
+
+`dotenv`를 사용해 JWT 시크릿 키를 은닉하였다. `JwtModule.register()`로 등록해 주면 된다.
+
+- **secret**: 토큰을 생성할 때 사용하는 비밀 키
+- **expiresIn**: 초 단위의 토큰 유효 기간
+
+### 애플리케이션에 Passport 모듈 등록하기
+
+애플리케이션에서 Passport를 사용하려면 앱 모듈에 등록해야 한다.
+
+**src/auth/auth.module.ts**
+```
+...
+imports: [
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: {
+        expiresIn: 60 * 60,
+      },
+    }),
+...
+```
+
+Passport 모듈은 전략 패턴으로 구현되어 있기 때문에 위와 같이 사용할 전략을 명시해 주면 된다.
+
+### 로그인 성공 시 JWT 토큰 생성
+
+이제 기존에 구현하였던 로그인 기능에 대한 서비스 로직에서 JWT 토큰을 생성해 주도록 만들면 된다.
+
+**src/auth/auth.service.ts**
+```
+...
+  async signIn(
+    authCredentialsDto: AuthCredentialsDto,
+  ): Promise<{ accessToken: string }> {
+    const { username, password } = authCredentialsDto;
+    const user = await this.userRepository.findUserById(username);
+
+    if (user && bcrypt.compare(user.password, password)) {
+      // generate user token (requires Secret + Payload)
+      const payload = { username };
+      const accessToken = this.jwtService.sign(payload);
+
+      return { accessToken };
+    } else {
+      throw new UnauthorizedException('logIn has been failed');
+    }
+  }
+...
+```
+
+함수의 반환형이 바뀌었으므로 컨트롤러의 타이핑도 수정해 주어야 한다.
+
+**src/auth/auth.controller.ts**
+```
+...
+  @Post('signin')
+  signIn(
+    @Body(ValidationPipe) authCredentialsDto: AuthCredentialsDto,
+  ): Promise<{ accessToken: string }> {
+    return this.authService.signIn(authCredentialsDto);
+  }
+...
+```
+
+이제 로그인하면 다음과 같은 응답이 온다.
+
+```
+{
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Imt5czAzMDYiLCJpYXQiOjE3MjIyNDgyMzUsImV4cCI6MTcyMjI1MTgzNX0.oQ9yITLHXT6agqTlzN1nlhWHdqcbk643XPosAPUE7PY"
+}
+```
+
+![JWT information](images/JWTDebug.png)
+
+JWT 홈페이지에서 디버깅하면 사용자 정보가 잘 해석되는 것을 확인할 수 있다. 이처럼 JWT 토큰은 디버깅이 쉽기 때문에 중요한 정보를 포함하지는 않는다.
+
+실제 서비스를 구현할 때 JWT 토큰 기반의 로그인을 구현한다면 액세스 토큰과 리프레시 토큰을 함께 사용하여 기능을 구현해야 한다는 점에 주의하자.
+
+## Passport, JWT 이용하여 토큰 인증 후 사용자 정보 조회하기
+
+로그인 후 JWT 토큰을 발급했다면 이제 사용자는 인증이 필요한 요청을 보낼 때마다 헤더에 JWT 토큰을 담아 요청을 전송할 것이다. 이때 서버는 토큰이 유효한지 검증하는 과정을 거쳐야 한다. 이번에는 이 기능에 해당되는 Passport 전략을 구현할 것이다.
+
+먼저 구현하기에 앞서 필요한 모듈인 `@types/passport-jwt` 모듈을 설치하고 JWT 전략 파일을 생성한다.
+
+```
+$ npm i @types/passport-jwt --save
+```
+
+**src/auth/jwt.strategy.ts**
+```
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UserRepository } from './user.repository';
+import * as dotenv from 'dotenv';
+import { User } from './user.entity';
+dotenv.config();
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(private readonly userRepository: UserRepository) {
+    super({
+      secretOrKey: process.env.JWT_SECRET,
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    });
+  }
+
+  async validate(payload): Promise<User> {
+    const { username } = payload;
+
+    const user: User = await this.userRepository.findUserById(username);
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    return user;
+  }
+}
+```
+
+- **@Injectable()**: NestJS는 JWT 전략을 필요한 곳 어디에서든 주입할 수 있다.
+- **secretOrKey**: 토큰을 검증할 때 사용할 비밀 키를 명시한다.
+- **jwtFromRequest**: 요청에 어떤 부분에서 JWT 토큰을 탐색할지를 명시한다. 여기서는 헤더의 Authorization 키의 값으로 Bearer 와 함께 전달된다고 명시하였다.
+- **validate()**: 생성자가 토큰 자체의 유효성을 검증했다면, 이 메서드는 사용자 정보의 유효성을 검증한다. 데이터베이스에서 사용자가 있는지 확인한 후 있다면 사용자 객체를 반환한다. 반환된 사용자 객체는 `@UseGuards(AuthGuard())`를 이용한 모든 요청의 요청 객체에 포함된다.
+
+이렇게 만든 전략을 실제로 사용하기 위해선 앱 모듈에 등록해 주어야 한다.
+
+**src/auth/auth.module.ts**
+```
+@Module({
+  imports: [
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: {
+        expiresIn: 60 * 60,
+      },
+    }),
+    TypeOrmModule.forFeature([User]),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, UserRepository, JwtStrategy],
+  exports: [JwtStrategy, PassportModule],
+})
+```
+
+프로바이더에 JWT 전략을 추가하고, JWT 전략과 Passport 모듈을 다른 모듈에서도 사용할 수 있도록 export 옵션에 명시하였다.
+
+### 요청 객체 안에 사용자 객체가 포함되도록 설정
+
+Express.js에서는 passport 사용 시 요청 객체를 사용해 `req.user`와 같이 사용자 정보를 가져올 수 있다. 이는 미들웨어로 동작하는 Passport 모듈이 요청 객체에 자동적으로 사용자 객체를 포함시켜주기 때문이다. 이번에는 NestJS에서 이러한 기능을 어떻게 사용하는지 알아보자. 이를 위해 테스트용 API를 만든다.
+
+**src/auth/auth.controller.ts**
+```
+...
+  @Post('authtest')
+  @UseGuards(AuthGuard())
+  authTest(@Req() req) {
+    console.log(req);
+  }
+...
+```
+
+이제 로그인한 후 응답되는 JWT 토큰을 요청 헤더에 담아 /auth/authtest 경로에 요청하면 요청 객체의 형태를 확인할 수 있다.
+
+## NestJS Middlewares
+
+![NestJS middlewares](images/Middlewares.png)
+
+NestJS에는 여러 가지 종류의 미들웨어가 있다. 이들은 상이한 목적을 가지며 사용되고 있다.
+
+- **Pipes**: 파이프는 요청 유효성 검사 및 데이터 파싱을 위해 사용된다. 데이터를 목적에 맞게 직렬화한다.
+- **Filters**: 필터는 오류 처리 미들웨어이다.
+- **Guards**: 가드는 인증 미들웨어이다.
+- **Interceptors**: 인터셉터는 응답 매핑, 캐시 관리, 요청 로깅 등과 같은 역할을 수행하는 요청 전후 미들웨어이다. 각 요청의 전후에 활용된다.
+
+### 클라이언트 요청이 이동하는 흐름
+
+1. client
+2. middleware
+3. guard
+4. interceptor (before)
+5. pipe
+6. controller
+7. service
+8. repository (optional)
+9. service
+10. controller
+11. interceptor (after)
+12. filter (if applicable)
+13. client
+
+## 커스텀 데코레이터 생성하기
+
+현재 Passport 모듈은 요청 객체의 user 속성에 데이터베이스에서 조회한 사용자 정보를 저장하고 있다. 그래서 사용자 정보를 읽으려면 `req.user`와 같이 참조해야 한다.
+
+이번에는 커스텀 데코레이터를 사용하여 `req.user`가 아닌 `user`로 사용자 정보를 참조해 오도록 설정한다. 데코레이터 파일을 다음과 같이 작성하자.
+
+**src/auth/get-user.decorator.ts**
+```
+import { createParamDecorator } from '@nestjs/common';
+
+export const GetUser = createParamDecorator((data, ctx) => {
+  const req = ctx.switchToHttp().getHttpRequest();
+  return req.user;
+});
+```
+
+이제 기존에 컨트롤러에서 요청 객체를 파라미터 데코레이터로 저장했던 그 부분을 커스텀 데코레이터로 변경한다.
+
+**src/auth/auth.controller.ts**
+```
+...
+  @Post('authtest')
+  @UseGuards(AuthGuard())
+  authTest(@GetUser() user: User) {
+    console.log(user);
+  }
+...
+```
+
+## 인증된 사용자만 게시물을 조회하고 작성할 수 있게 해주기
+
+이번에는 인증된 사용자만 게시물에 대한 조작을 수행할 수 있도록 하는 기능을 구현한다.
+
+### 사용자에게 게시물 접근 권한 부여하기
+
+먼저, 인증과 관련된 기능을 Board 모듈에서 사용할 수 있어야 하기 때문에 Board module에서 인증 모듈을 import 해야 한다. 그러면 인증 모듈에서 export 하는 어떤 것이든 사용할 수 있게 된다.
+
+**src/boards/boards.module.ts**
+```
+import { Module } from '@nestjs/common';
+import { BoardsController } from './boards.controller';
+import { BoardsService } from './boards.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Board } from './board.entity';
+import { BoardRepository } from './board.repository';
+import { AuthModule } from 'src/auth/auth.module';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Board]), AuthModule],
+  controllers: [BoardsController],
+  providers: [BoardsService, BoardRepository],
+})
+export class BoardsModule {}
+```
+
+다음으로는 컨트롤러에서 `@UseGuards(AuthGuard())` 데코레이션으로 데코레이터가 적용되는 모든 범위의 라우터가 작동할 때 사용자 검증을 수행한다.
+
+**src/boards/boards.controller.ts**
+```
+...
+@Controller('boards')
+@UseGuards(AuthGuard())
+export class BoardsController {
+...
+```
+
+컨트롤러에 `@UseGuards()` 데코레이터를 적용하면 해당 데코레이터는 하위에 있는 라우터 모두에 적용된다.
+
+![Authorized request](images/AuthorizedGetBoard.png)
+
+![Unauthorized request](images/AuthorizedGetBoard.png)
+
+설정하면 게시물 자체에 대한 API 요청을 JWT 토큰이 없는 사용자는 하지 못함을 확인할 수 있다.
