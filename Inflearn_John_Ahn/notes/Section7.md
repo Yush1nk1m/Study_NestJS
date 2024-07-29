@@ -641,12 +641,15 @@ NestJS에는 여러 가지 종류의 미들웨어가 있다. 이들은 상이한
 
 **src/auth/get-user.decorator.ts**
 ```
-import { createParamDecorator } from '@nestjs/common';
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { User } from './user.entity';
 
-export const GetUser = createParamDecorator((data, ctx) => {
-  const req = ctx.switchToHttp().getHttpRequest();
-  return req.user;
-});
+export const GetUser = createParamDecorator(
+  (data, ctx: ExecutionContext): User => {
+    const req = ctx.switchToHttp().getRequest();
+    return req.user;
+  },
+);
 ```
 
 이제 기존에 컨트롤러에서 요청 객체를 파라미터 데코레이터로 저장했던 그 부분을 커스텀 데코레이터로 변경한다.
