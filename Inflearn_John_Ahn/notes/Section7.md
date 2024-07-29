@@ -272,3 +272,108 @@ export class User extends BaseEntity {
   }
 ...
 ```
+
+## 비밀번호 암호화하기
+
+이번에는 사용자 생성 시 비밀번호를 암호화해 저장하는 로직을 구현한다. 기능 구현을 위해 `bcrypt`를 사용한다. 다음과 같이 모듈을 설치하자.
+
+```
+$ npm i bcryptjs --save
+```
+
+### 비밀번호를 데이터베이스에 저장하는 방법
+
+일반적으로 비밀번호를 데이터베이스에 저장하는 방법은 다음과 같은 것들이 있다.
+
+- **원본 비밀번호를 저장**: 최악의 방법이다.
+- **비밀 키를 사용해 양방향 암호화하여 저장**: 비밀 키가 노출되면 위험하다.
+- **SHA256 등의 알고리즘으로 단방향 암호화하여 저장**: 레인보우 테이블을 사용한 해킹 취약점이 존재한다. 이를 보완하기 위해 salt라고 불리는 임의의 문자열을 비밀번호에 붙여 단방향 암호화한다.
+
+그러므로 세 번째 방법과 솔트를 함께 사용하여 암호화할 것이다.
+
+### 소스 코드 구현
+
+기존의 회원가입 기능의 리포지토리 로직을 다음과 같이 수정한다.
+
+**src/auth/user.repository.ts**
+```
+...
+import * as bcrypt from 'bcrypt'
+...
+  async createUser(authCredentialsDto: AuthCredentialsDto): Promise<void> {
+    try {
+      const { username, password } = authCredentialsDto;
+
+      const salt = await bcrypt.genSalt();
+      const hashedPassword = await bcrypt.hash(password, salt);
+      const user = this.repository.create({
+        username,
+        password: hashedPassword,
+      });
+
+      await this.repository.save(user);
+    } catch (error) {
+      if (error.code === '23505') {
+        throw new ConflictException('Existing username');
+      } else {
+        throw new InternalServerErrorException();
+      }
+    }
+  }
+...
+```
+
+![bcrypt password test](images/bcryptTest.png)
+
+이후 회원가입을 진행하고 데이터베이스에 저장된 비밀번호를 확인하면 단방향 암호화가 잘 수행되었음을 확인할 수 있다.
+
+## 로그인 기능 구현하기
+
+이번에는 로그인 기능을 구현한다.
+
+리포지토리 계층에서는 데이터베이스에서 ID로 사용자를 찾는 `findUserById()` 메서드를 구현한다.
+
+**src/auth/user.repository.ts**
+```
+...
+  async findUserById(username: string): Promise<User> {
+    return this.repository.findOne({ where: { username } });
+  }
+...
+```
+
+서비스 계층에서는 리포지토리 메서드를 사용하여 사용자를 찾고 비밀번호가 유효한지 검사한다.
+
+**src/auth/auth.service.ts**
+```
+...
+  async signIn(authCredentialsDto: AuthCredentialsDto): Promise<string> {
+    const { username, password } = authCredentialsDto;
+    const user = await this.userRepository.findUserById(username);
+
+    if (user && bcrypt.compare(user.password, password)) {
+      return 'logIn has been succeeded';
+    } else {
+      throw new UnauthorizedException('logIn has been failed');
+    }
+  }
+...
+```
+
+컨트롤러 계층에서는 위에서 구현한 내용을 연결한다.
+
+**src/auth/auth.controller.ts**
+```
+...
+  @Post('signin')
+  signIn(
+    @Body(ValidationPipe) authCredentialsDto: AuthCredentialsDto
+  ): Promise<string> {
+    return this.authService.signIn(authCredentialsDto);
+  }
+...
+```
+
+![POST auth/signin test](images/signinTest.png)
+
+기존에 가입한 회원 정보로 로그인을 시도하면 다음과 같이 성공함을 확인할 수 있다.
