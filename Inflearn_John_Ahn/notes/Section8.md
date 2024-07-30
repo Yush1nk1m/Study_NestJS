@@ -156,7 +156,7 @@ Board 객체를 반환할 때 보안을 위해 사용자 정보를 제거하여 
 ```
 ...
   async getAllBoards(user: User): Promise<Board[]> {
-    const query = this.repository.createQueryBuilder();
+    const query = this.repository.createQueryBuilder('board');
 
     query.where('board.userId = :userId', { userId: user.id });
 

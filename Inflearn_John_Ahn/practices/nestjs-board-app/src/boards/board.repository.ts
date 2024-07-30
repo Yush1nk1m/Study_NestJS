@@ -18,7 +18,7 @@ export class BoardRepository {
   }
 
   async getAllBoards(user: User): Promise<Board[]> {
-    const query = this.repository.createQueryBuilder();
+    const query = this.repository.createQueryBuilder('board');
 
     query.where('board.userId = :userId', { userId: user.id });
 
