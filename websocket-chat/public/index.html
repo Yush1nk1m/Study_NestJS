@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NestJS WebSocket Chat</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      #chat-container {
+        border: 1px solid #ccc;
+        padding: 20px;
+        height: 400px;
+        overflow-y: scroll;
+      }
+      #message-input {
+        width: 70%;
+        padding: 5px;
+      }
+      #send-button {
+        padding: 5px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>NestJS WebSocket Chat</h1>
+    <div>
+      <input type="text" id="username-input" placeholder="Enter username" />
+      <input type="text" id="room-input" placeholder="Enter room name" />
+      <button id="join-button">Join Room</button>
+      <button id="leave-button">Leave Room</button>
+    </div>
+    <div id="chat-container"></div>
+    <div>
+      <input
+        type="text"
+        id="message-input"
+        placeholder="Type your message..."
+      />
+      <button id="send-button">Send</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+    <script>
+      const socket = io('http://localhost:3000');
+      let currentRoom = '';
+      let username = '';
+
+      const chatContainer = document.getElementById('chat-container');
+      const messageInput = document.getElementById('message-input');
+      const sendButton = document.getElementById('send-button');
+      const usernameInput = document.getElementById('username-input');
+      const roomInput = document.getElementById('room-input');
+      const joinButton = document.getElementById('join-button');
+      const leaveButton = document.getElementById('leave-button');
+
+      joinButton.addEventListener('click', () => {
+        username = usernameInput.value;
+        const room = roomInput.value;
+        if (username && room) {
+          socket.emit('joinRoom', { username, room });
+          currentRoom = room;
+          addMessage('System', `You have joined room: ${room}`);
+        }
+      });
+
+      leaveButton.addEventListener('click', () => {
+        if (currentRoom) {
+          socket.emit('leaveRoom', { username, room: currentRoom });
+          addMessage('System', `You have left room: ${currentRoom}`);
+          currentRoom = '';
+        }
+      });
+
+      sendButton.addEventListener('click', () => {
+        const message = messageInput.value;
+        if (message && currentRoom) {
+          socket.emit('chatToServer', { username, room: currentRoom, message });
+          messageInput.value = '';
+        }
+      });
+
+      socket.on('chatToClient', (data) => {
+        addMessage(data.username, data.message);
+      });
+
+      socket.on('message', (data) => {
+        addMessage(data.username, data.text);
+      });
+
+      function addMessage(username, message) {
+        const messageElement = document.createElement('div');
+        messageElement.textContent = `${username}: ${message}`;
+        chatContainer.appendChild(messageElement);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    </script>
+  </body>
+</html>
